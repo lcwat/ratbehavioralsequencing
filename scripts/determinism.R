@@ -8,7 +8,7 @@
 #===========================================================#  
 
 # Load required packages 
-library(fNonlinear) 
+# library(fNonlinear) 
 library(spatstat)  
 
 #===========================================================# 
@@ -41,7 +41,7 @@ determinism <- function(x, minl) {
   # Depending on the dataset it may be desirable to filter out diagonals perpendicular 
   # to the main diagonal. Code is provided for the ‘removeperpdiag’ function below. 
   # Delete “#” from the line below to filter out perpendicular diagonals  
-  # yc = removeperpdiag(yc,minl)  
+  # yc = removeperpdiag(yc,minl)
   # Note: this code may take several minutes to run for very long sequences  
   # ---- filter out short repeats: a ‘trapline’ should include more unique resources 
   # ---- than the minimum cutoff (minl)
@@ -88,44 +88,44 @@ determinism <- function(x, minl) {
 #---optional function to filter out perpendicular diagonals 
 #===========================================================#  
 
-# removeperpdiag = function(yc,minl) { 
-#   #first, remove observations that are too short to save time 
-#   remove = names(table(yc)[table(yc)< minl]) 
-#   
-#   for (i in remove) { 
-#     yc[ yc == i ] = NA 
-#   }  
-#   
-#   #Only do these steps if there are perpendicular diagonals longer than minl 
-#   if(sum(!is.na(yc))!= 0) {  
-#     #-------remove sequences perpendicular to the main diagonal 
-#     # save list of levels (aka groups of continuous points) that weren't removed 
-#     # in the previous step 
+# removeperpdiag = function(yc,minl) {
+#   #first, remove observations that are too short to save time
+#   remove = names(table(yc)[table(yc)< minl])
+# 
+#   for (i in remove) {
+#     yc[ yc == i ] = NA
+#   }
+# 
+#   #Only do these steps if there are perpendicular diagonals longer than minl
+#   if(sum(!is.na(yc))!= 0) {
+#     #-------remove sequences perpendicular to the main diagonal
+#     # save list of levels (aka groups of continuous points) that weren't removed
+#     # in the previous step
 #     newlevels = levels(droplevels(yc))
-#     
-#     #use a loop to go through each level and remove all that are not parallel 
-#     for (i in 1:length(newlevels)) {  
-#       # only look at matrix positions of current contiguous group 
-#       set = which(yc == newlevels[i])  
-#       
-#       #make a list of all possible parallel points 
-#       pardiag = c(seq(set[1], length(yc), (nrow(yc) +1))[-1],seq(set[1], 0, (nrow(yc) +1))[-1])  
-#       
-#       for(i in 1:length(set)) { 
-#         pardiag = c(pardiag,c(seq(set[i], length(yc), (nrow(yc) +1))[-1],seq(set[i], 0, -(nrow(yc) +1))[-1])) 
-#       }  
-#       
-#       #remove points that don't fall in these positions 
-#       keepers = set[set %in% pardiag] 
-#       toberemoved = setdiff(set,keepers)  
-#       if(length(toberemoved) > 0) { 
-#         yc[toberemoved] = NA 
-#       } 
+# 
+#     #use a loop to go through each level and remove all that are not parallel
+#     for (i in 1:length(newlevels)) {
+#       # only look at matrix positions of current contiguous group
+#       set = which(yc == newlevels[i])
+# 
+#       #make a list of all possible parallel points
+#       pardiag = c(seq(set[1], length(yc), (nrow(yc) +1))[-1],seq(set[1], 0, (nrow(yc) +1))[-1])
+# 
+#       for(i in 1:length(set)) {
+#         pardiag = c(pardiag,c(seq(set[i], length(yc), (nrow(yc) +1))[-1],seq(set[i], 0, -(nrow(yc) +1))[-1]))
+#       }
+# 
+#       #remove points that don't fall in these positions
+#       keepers = set[set %in% pardiag]
+#       toberemoved = setdiff(set,keepers)
+#       if(length(toberemoved) > 0) {
+#         yc[toberemoved] = NA
+#       }
 #     }
-#   } 
-#   
-#   yc 
-# }  
+#   }
+# 
+#   yc
+# }
 
 #===========================================================# 
 ##------Example DET calculation------------------------------# 

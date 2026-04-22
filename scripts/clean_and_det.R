@@ -11,19 +11,18 @@
 library(tidyverse)
 
 source('scripts/determinism.R')
-source('scripts/plot_recurrence.R')
+# source('scripts/plot_recurrence.R')
 #
 # load data ---------------------------------------------------------------
 
 # list files
-path <- 'data/cleaned/'
-file_list <- list.files(path)
+file_list <- list.files('data/cleaned/simple_sample_test/', full.names = T)
 
-d <- read_csv(paste0(path, file_list[1]))
+d <- read_csv(file_list[1])
 
 summary(d)
 
-d |> 
+s <- d |> 
   group_by(behavior_id) |> 
   summarize(
     behavior = unique(behavior)
@@ -45,10 +44,11 @@ d |>
       T, 
       F
     )
-  )
+  ) |> 
+  filter(!repeated) |> 
+  pull(int_behavior)
 
 # 10 minutes of video, 36000 frames, split before and after frame 18000
-
 det_df <- tibble(
   animal_id = character(), 
   group_id = character(), 
@@ -58,9 +58,11 @@ det_df <- tibble(
   second_half_det = numeric()
 )
 
+seq_list <- list()
+
 # read in file, summarize and clean, calc det, then get out
 for(file in file_list) {
-  df <- read_csv(paste0(path, file), show_col_types = F)
+  df <- read_csv(file, show_col_types = F)
   
   overall <- df |> 
     group_by(behavior_id) |> 
@@ -165,10 +167,43 @@ for(file in file_list) {
   det_df <- det_df |> 
     rbind(det_df_add)
   
-  print(which(file_list == file))
+  # sequences
+  subj <- df |> 
+    pull(animal_id) |> 
+    unique()
+  group <- df |> 
+    pull(group_id) |> 
+    unique()
+  phase <- df |> 
+    pull(phase) |> 
+    unique()
+  
+  # add to list
+  file_no = which(file_list == file)
+  
+  if (file_no == 1) {
+    seq_list[[1]] = c(subj)
+    seq_list[[2]] = c(group)
+    seq_list[[3]] = c(phase)
+    seq_list[[4]] = list(overall)
+  }
+  else {
+    seq_list[[1]][file_no] = c(subj)
+    seq_list[[2]][file_no] = c(group)
+    seq_list[[3]][file_no] = c(phase)
+    seq_list[[4]][[file_no]] = list(overall)
+  }
+  
+  print(file_no)
 }
 
-write_csv(det_df, 'data/determinism_data/det_sample_halves_and_4_behav.csv')
+
+# write obj to file
+write_csv(det_df, 'data/determinism_data/det_all_halves_and_upp_low_behav.csv')
+write_rds(seq_list, 'data/determinism_data/all_sequences_upp_low_behav.rds')
+
+det_df <- read_csv('data/determinism_data/det_sample_halves_and_4_behav.csv')
+seq_list <- read_rds('data/determinism_data/sequences_4_behav.rds')
 
 det_df |> 
   ggplot(aes(x = overall_det, fill = group_id)) +
@@ -179,7 +214,7 @@ det_df |>
 
 ggsave(
   'fig_output/overall_determinism_by_group.png', device = 'png', 
-  width = 4, height = 4, units = 'in'
+  width = 6, height = 4, units = 'in'
 )
 
 # check out differences from 1st to 2nd half
@@ -203,7 +238,7 @@ det_df |>
 
 ggsave(
   'fig_output/determinism_halves_distribution.png', device = 'png', 
-  height = 4, width = 4, units = 'in'
+  height = 4, width = 6, units = 'in'
 )
   
 # check out difference between halves
@@ -223,32 +258,123 @@ det_df |>
 
 ggsave(
   'fig_output/determinism_contrast_distribution.png', device = 'png', 
-  height = 4, width = 4, units = 'in'
+  height = 4, width = 6, units = 'in'
 )
 
 df |> 
   distinct(behavior)
 
+# sequence analysis -------------------------------------------------------
 
-# clean and det -----------------------------------------------------------
+# see what sequences are being repeated in each run
+s <- seq_list[[4]][[1]]
 
-# remove no behavior chunks
-behav_seq <- behavior_summary |> 
+m1 <- matrix(cbind(rep(s, length(s))), nrow = length(s))
+tm1 <- t(m1)
+det <- ((m1-tm1)==0)*1
+
+det2 = matrix(rep(s, nrow(det)), nrow = nrow(det), byrow = TRUE) * det 
+
+# set big diag to zero
+diag(det) <- 0
+
+# set lower triangle to 0
+det[lower.tri(det)] = 0
+
+seq_df <- tibble(
+  start_id1 = numeric(), 
+  start_id2 = numeric(),
+  seq = numeric()
+)
+
+for (i in 1:length(s)) {
+  for (j in 1:length(s)) {
+    
+    k = i
+    l = j
+    
+    # start true
+    contiguous = TRUE
+    
+    little_s = c()
+    
+    # find sequence
+    while (contiguous) {
+      
+      # break if out of bounds
+      if (k > length(s) | l > length(s)) {
+        contiguous = FALSE
+      }
+      else {
+        if (det[k, l] != 0) {
+          contiguous = TRUE
+          
+          little_s = c(little_s, det2[k, l])
+        }
+        else {
+          contiguous = FALSE
+          
+          if (k == i + 1) {
+            # ignore
+          }
+          else {
+            # write to df
+            seq_df = seq_df |> 
+              add_row(
+                start_id1 = i,
+                start_id2 = j, 
+                seq = as.numeric(str_flatten(little_s)) # turn into single number
+              )
+          }
+        }
+      }
+      
+      # iterate
+      k = k + 1
+      l = l + 1
+    }
+  }
+}
+
+# remove non-sequences and sequences less than 3 long
+new_seq_df <- seq_df |> 
   drop_na() |> 
-  mutate(
-    repeated = if_else(
-      dplyr::lag(int_behavior, default = 0) == int_behavior, 
-      T, 
-      F
+  filter(seq > 100) # 100 is lowest value 3L numeric seq can take 
+
+clean_seq_df <- tibble(
+  start_id1 = numeric(), 
+  start_id2 = numeric(), 
+  seq = numeric()
+)
+
+# remove sequences that are just previous sequences
+for (i in 1:nrow(new_seq_df)) {
+  
+  # check if there are previous steps to sequence, if not, keep, if yes, remove
+  prev_i = new_seq_df$start_id1[i] - 1
+  prev_j = new_seq_df$start_id2[i] - 1
+  
+  # check
+  result = new_seq_df |> 
+    filter(
+      start_id1 == prev_i & start_id2 == prev_j
     )
-  ) |>
-  dplyr::filter(repeated != T) |> 
-  pull(int_behavior)
+  
+  if (nrow(result) < 1) {
+    # save
+    clean_seq_df <- clean_seq_df |> 
+      bind_rows(
+        slice(new_seq_df, i)
+      )
+  }
+}
 
-# remove back to back 
+# count unique sequences
+seq_counts <- clean_seq_df |> 
+  count(seq)
 
-determinism(behav_seq, 3)
+nrow(clean_seq_df) / sum(det)
 
-# plot
-plot_recurrence(behav_seq)
-
+# still not sure how to get the right sequences, not sure if this is the right 
+# way to get them or if I'm missing some other part of the determinism calculation
+# b/c this seems like too few sequences 
